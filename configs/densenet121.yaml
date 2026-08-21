@@ -1,0 +1,38 @@
+experiment_name: densenet121_nih9
+seed: 42
+output_dir: /content/drive/MyDrive/Thoracic_Disease_Detection/outputs/densenet121
+
+data:
+  metadata_csv: /content/data/nih-chest-xray/Data_Entry_2017.csv
+  image_root: /content/data/nih-chest-xray
+  train_val_list: /content/data/nih-chest-xray/train_val_list.txt
+  test_list: /content/data/nih-chest-xray/test_list.txt
+  classes:
+    - Atelectasis
+    - Cardiomegaly
+    - Effusion
+    - Infiltration
+    - Mass
+    - Nodule
+    - Pneumonia
+    - Pneumothorax
+    - Consolidation
+  validation_fraction: 0.15
+  image_size: 224
+  batch_size: 64
+  num_workers: 8
+
+model:
+  name: densenet121
+  pretrained: true
+  dropout: 0.2
+
+training:
+  epochs: 8
+  freeze_backbone_epochs: 1
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  gradient_clip_norm: 1.0
+  early_stopping_patience: 3
+  mixed_precision: true
+
