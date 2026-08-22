@@ -39,7 +39,7 @@ def main() -> None:
     print("\nDisease prevalence")
     for class_name in NIH_14_CLASSES:
         count = metadata["Finding Labels"].fillna("").str.split("|").apply(
-            lambda labels: class_name in labels
+            lambda labels, target=class_name: target in labels
         ).sum()
         print(f"{class_name:20s} {count:>7,}")
 
@@ -54,4 +54,3 @@ def _line_count(path: Path) -> int:
 
 if __name__ == "__main__":
     main()
-

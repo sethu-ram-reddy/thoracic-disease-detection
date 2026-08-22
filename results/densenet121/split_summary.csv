@@ -1,0 +1,4 @@
+split,images,patients,Atelectasis,Cardiomegaly,Effusion,Infiltration,Mass,Nodule,Pneumonia,Pneumothorax,Consolidation
+train,73254,23806,7024,1452,7236,11637,3392,3973,741,2222,2433
+validation,13270,4202,1256,255,1423,2145,642,735,135,415,419
+test,25596,2797,3279,1069,4658,6112,1748,1623,555,2665,1815

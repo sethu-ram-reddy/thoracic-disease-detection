@@ -20,6 +20,4 @@ mlruns/
 *.pth
 *.ckpt
 
-results/*
-!results/.gitkeep
-
+results/**/test_predictions.csv

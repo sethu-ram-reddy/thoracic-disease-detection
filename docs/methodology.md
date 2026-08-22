@@ -1,59 +1,122 @@
 # Methodology
 
-## Problem definition
+## Study objective
 
-The system performs multi-label classification because a single chest radiograph can contain
-multiple findings. The default experiment predicts nine findings from NIH ChestXray14:
-Atelectasis, Cardiomegaly, Effusion, Infiltration, Mass, Nodule, Pneumonia, Pneumothorax, and
-Consolidation.
+This project performs multi-label classification of nine thoracic findings and evaluates whether
+a convolutional inductive bias (DenseNet-121) or a patch-based transformer (ViT-B/16) is more
+effective under an identical transfer-learning budget on NIH ChestXray14.
+
+## Dataset and target definition
+
+The audited dataset contains 112,120 radiographs. A study may contain more than one finding, so
+each label is encoded independently. The evaluated targets are Atelectasis, Cardiomegaly, Effusion,
+Infiltration, Mass, Nodule, Pneumonia, Pneumothorax, and Consolidation.
+
+The project intentionally does not call the output a diagnosis. ChestXray14 labels were extracted
+from reports and may be missing, incorrect, or clinically ambiguous.
 
 ## Leakage-safe splitting
 
-The official NIH test list is preserved. The official training/validation set is split again at
-the patient level using iterative multi-label stratification. No patient can appear in more than
-one split. This is checked before training and cached in CSV manifests.
+The official NIH test list is preserved. The official training/validation list is divided at the
+patient level using iterative multi-label stratification. Patient-level targets are calculated by
+taking the maximum label value across a patient's images before stratification.
 
-## Preprocessing
+| Split | Images | Patients |
+|---|---:|---:|
+| Train | 73,254 | 23,806 |
+| Validation | 13,270 | 4,202 |
+| Test | 25,596 | 2,797 |
 
-Images are converted to RGB to match ImageNet-pretrained model inputs, resized to 224 x 224,
-normalized using ImageNet statistics, and augmented during training with small rotations and
-horizontal flips. Validation and test images receive deterministic preprocessing only.
+The data module verifies that no patient identifier occurs in two partitions. Split manifests are
+cached with the experiment output so training, threshold selection, and evaluation use exactly the
+same observations.
 
-## Models
+## Image preprocessing
 
-- DenseNet-121 uses ImageNet initialization and replaces its classifier with dropout followed by
-  a nine-output linear layer.
-- ViT-B/16 uses ImageNet initialization and replaces its classification head with dropout followed
-  by a nine-output linear layer.
+Images are decoded as RGB because both backbones use ImageNet initialization. All inputs are
+resized to 224 × 224 and normalized with ImageNet mean and standard deviation.
 
-The classification head is trained for one warm-up epoch before the entire network is unfrozen.
+Training images receive a random horizontal flip and a random rotation within ±7 degrees.
+Validation and test preprocessing is deterministic. No augmentation is applied while selecting
+thresholds or reporting final metrics.
+
+## Architectures
+
+### DenseNet-121
+
+The ImageNet classifier is replaced by dropout and a nine-output linear layer. Dense connectivity
+supports feature reuse and is well suited to local texture and opacity patterns in radiographs.
+
+### ViT-B/16
+
+The ImageNet classification head is replaced by dropout and a nine-output linear layer. The model
+represents the image as 16 × 16 patches and learns global interactions through self-attention.
+
+For both models, only the classification head is trainable during epoch one. The full backbone is
+unfrozen from epoch two onward.
 
 ## Optimization
 
-The loss is binary cross-entropy with logits. A positive weight is calculated separately for every
-disease from the training split to reduce the effect of class imbalance. Training uses AdamW,
-cosine learning-rate decay, mixed precision on CUDA, gradient clipping, checkpointing, and early
-stopping based on validation macro AUROC.
+The objective is `BCEWithLogitsLoss`. For every disease, the positive weight is calculated as the
+number of negative training examples divided by the number of positive training examples. This
+reduces domination by the negative class without resampling the official image distribution.
 
-## Evaluation
+Both experiments use AdamW, cosine learning-rate decay, gradient clipping at 1.0, mixed precision,
+best/latest checkpointing, and early stopping on validation macro AUROC.
 
-Decision thresholds are selected independently for each disease on the validation split by
-maximizing F1 over a fixed threshold grid. These thresholds are frozen before test evaluation.
-The reported metrics include disease-level AUROC, AUPRC, precision, recall, and F1, plus macro and
-micro aggregates. AUROC and AUPRC are emphasized because raw accuracy is misleading for rare
-findings.
+| Setting | DenseNet-121 | ViT-B/16 |
+|---|---:|---:|
+| Epochs | 8 | 8 |
+| Batch size | 64 | 48 |
+| Initial learning rate | 3e-4 | 1e-4 |
+| Weight decay | 1e-4 | 1e-4 |
+| Warm-up head-only epochs | 1 | 1 |
+
+The completed runs used PyTorch 2.11 with CUDA 12.8 on an NVIDIA A100-SXM4 80 GB GPU.
+
+## Threshold selection and evaluation
+
+The models emit nine independent probabilities. A single threshold of 0.5 is not assumed to be
+appropriate across findings with different prevalence and score distributions.
+
+For each disease, a threshold is selected on validation predictions by maximizing F1 over values
+from 0.05 through 0.95 in increments of 0.05. Thresholds are then frozen. The test set is processed
+once to produce disease-level AUROC, AUPRC, precision, recall, and F1, plus macro and micro
+aggregates.
+
+AUROC measures ranking across thresholds. AUPRC is emphasized alongside AUROC because it is more
+sensitive to performance on rare positive findings. F1 describes the selected operating point but
+does not express calibration or clinical utility.
 
 ## Explainability
 
-Grad-CAM is generated from the final DenseNet-121 convolutional normalization layer. The heatmap
-shows image regions that most influenced a selected class score. It is a model-inspection aid, not
-a clinical localization guarantee.
+Grad-CAM is generated for DenseNet-121 from
+`features.denseblock4.denselayer16.conv2`, the final convolution in the last dense block. Gradients
+of a selected class logit are spatially averaged and used to weight activation maps. The resulting
+map is rectified, resized to input resolution, normalized, and overlaid on the radiograph.
 
-## Known limitations
+The final feature map is spatially coarse, so these visualizations indicate broad influential
+regions. They are not pixel-accurate lesion boundaries and must not be interpreted as causal or
+clinically validated localization.
 
-- NIH ChestXray14 labels were extracted from reports and can contain noise.
-- The project does not perform external validation on another hospital system.
-- Demographic subgroup performance and calibration are not yet included.
-- Grad-CAM can be visually persuasive without being causally faithful.
-- The software is a research demonstration and is not a medical device.
+## Results interpretation
 
+DenseNet-121 achieved 0.7826 macro AUROC and 0.2997 macro AUPRC. ViT-B/16 achieved 0.7544 and
+0.2638 respectively. DenseNet also produced higher AUROC for every evaluated disease.
+
+The controlled result supports DenseNet-121 for this dataset and budget. It does not establish
+that convolutional models universally outperform transformers. More extensive transformer
+pretraining, resolution, augmentation, regularization, or optimization could change the result.
+
+## Limitations and responsible use
+
+- The labels are weak report-derived annotations rather than adjudicated diagnoses.
+- Nine of fourteen ChestXray14 findings are evaluated.
+- No external hospital dataset is used for validation.
+- There is no subgroup fairness analysis or confidence calibration study.
+- Images are resized to 224 × 224, which may suppress subtle findings.
+- The experiment is not optimized for clinical sensitivity or specificity requirements.
+- Grad-CAM can appear plausible even when a model relies on confounding information.
+
+The repository is a machine-learning engineering and research demonstration. It is not intended
+for patient care, triage, or medical decision support.

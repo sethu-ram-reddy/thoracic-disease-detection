@@ -56,7 +56,7 @@ class ExperimentConfig:
     training: TrainingConfig
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "ExperimentConfig":
+    def from_yaml(cls, path: str | Path) -> ExperimentConfig:
         with Path(path).open("r", encoding="utf-8") as handle:
             raw: dict[str, Any] = yaml.safe_load(handle)
 
@@ -97,4 +97,3 @@ class ExperimentConfig:
 
 def _expand(value: str) -> str:
     return os.path.abspath(os.path.expandvars(os.path.expanduser(value)))
-

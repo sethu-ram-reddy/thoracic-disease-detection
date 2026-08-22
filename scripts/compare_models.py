@@ -40,20 +40,65 @@ def main() -> None:
     summary_frame.to_csv(output_dir / "model_summary.csv", index=False)
     class_frame.to_csv(output_dir / "disease_level_comparison.csv", index=False)
 
+    sns.set_theme(style="whitegrid", context="talk")
     melted = summary_frame.melt(
         id_vars="model",
         value_vars=["macro_auroc", "macro_auprc", "macro_f1"],
         var_name="metric",
     )
-    figure, axis = plt.subplots(figsize=(8, 5))
-    sns.barplot(data=melted, x="metric", y="value", hue="model", ax=axis)
-    axis.set(title="DenseNet-121 vs ViT-B/16", xlabel="Metric", ylabel="Score", ylim=(0, 1))
+    metric_labels = {
+        "macro_auroc": "Macro AUROC",
+        "macro_auprc": "Macro AUPRC",
+        "macro_f1": "Macro F1",
+    }
+    melted["metric"] = melted["metric"].map(metric_labels)
+    figure, axis = plt.subplots(figsize=(9, 5.5))
+    sns.barplot(
+        data=melted,
+        x="metric",
+        y="value",
+        hue="model",
+        palette=["#155EEF", "#F79009"],
+        ax=axis,
+    )
+    axis.set(
+        title="Test-set model comparison",
+        xlabel="",
+        ylabel="Score",
+        ylim=(0, 0.9),
+    )
+    for container in axis.containers:
+        axis.bar_label(container, fmt="%.3f", padding=3, fontsize=10)
+    sns.despine(ax=axis)
     figure.tight_layout()
     figure.savefig(output_dir / "model_comparison.png", dpi=200, bbox_inches="tight")
+    plt.close(figure)
+
+    disease_auroc = class_frame[["model", "class", "auroc"]].copy()
+    figure, axis = plt.subplots(figsize=(12, 6))
+    sns.barplot(
+        data=disease_auroc,
+        x="class",
+        y="auroc",
+        hue="model",
+        palette=["#155EEF", "#F79009"],
+        ax=axis,
+    )
+    axis.set(
+        title="Disease-level test AUROC",
+        xlabel="",
+        ylabel="AUROC",
+        ylim=(0.6, 0.92),
+    )
+    axis.tick_params(axis="x", rotation=30)
+    sns.despine(ax=axis)
+    figure.tight_layout()
+    figure.savefig(
+        output_dir / "disease_auroc_comparison.png", dpi=200, bbox_inches="tight"
+    )
     plt.close(figure)
     print(summary_frame.to_string(index=False))
 
 
 if __name__ == "__main__":
     main()
-

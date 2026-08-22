@@ -46,7 +46,7 @@ def unfreeze_model(model: nn.Module) -> None:
 def gradcam_target_layer(model: nn.Module, model_name: str) -> nn.Module:
     if model_name != "densenet121":
         raise ValueError("Grad-CAM is currently supported for DenseNet-121 only.")
-    return model.features.norm5
+    return model.features.denseblock4.denselayer16.conv2
 
 
 def _classification_head(model: nn.Module, model_name: str) -> nn.Module:

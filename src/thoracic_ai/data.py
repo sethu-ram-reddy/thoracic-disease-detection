@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -57,7 +57,9 @@ def encode_labels(metadata: pd.DataFrame, classes: list[str]) -> pd.DataFrame:
     encoded = metadata[["Image Index", "Patient ID", "Finding Labels"]].copy()
     label_sets = encoded["Finding Labels"].fillna("").str.split("|").apply(set)
     for class_name in classes:
-        encoded[class_name] = label_sets.apply(lambda labels: float(class_name in labels))
+        encoded[class_name] = label_sets.apply(
+            lambda labels, target=class_name: float(target in labels)
+        )
     return encoded
 
 
